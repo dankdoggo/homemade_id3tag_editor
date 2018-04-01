@@ -3,26 +3,12 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 
 class Upload extends CI_Controller {
 
-	/**
-	 * Index Page for this controller.
-	 *
-	 * Maps to the following URL
-	 * 		http://example.com/index.php/welcome
-	 *	- or -
-	 * 		http://example.com/index.php/welcome/index
-	 *	- or -
-	 * Since this controller is set as the default controller in
-	 * config/routes.php, it's displayed at http://example.com/
-	 *
-	 * So any other public methods not prefixed with an underscore will
-	 * map to /index.php/welcome/<method_name>
-	 * @see https://codeigniter.com/user_guide/general/urls.html
-	 */
-
 	public function __construct()
 	{
 	        parent::__construct();
 	        $this->load->helper(array('form', 'url'));
+	        $this->load->library('session'); // starting session to store filename
+
 	}
 
 
@@ -33,7 +19,7 @@ class Upload extends CI_Controller {
 	}
 
 	/**
-	 * Fonction qui upload un fichier dans un dossier pour pouvoir le modifier par la suite
+	 * Uploading file
 	 */
 	public function do_upload()
 	{
@@ -60,23 +46,33 @@ class Upload extends CI_Controller {
 	}
 
 	/**
-	 * Fonction qui va lire les propriétés du fichier
-	 * @param $file : array (le fichier)
+	 * Read file property
+	 * @param $file : array | string (le fichier)
 	 */
 	public function read_file($file)
 	{    	
-		$name = $file['file_path'].$file['file_name']; // Mon fichier
+		if(is_array($file) && count($file) > 0)
+		{
+			$name = $_SESSION['filename'] = $file['file_path'].$file['file_name']; // Mon fichier
+		}
+		else
+		{
+			$name = $_SESSION['filename'] = $file; // Mon fichier
+		}
+
 		$infos = [];
 		$id3_obj = new getID3;
 		$analyze = $id3_obj->analyze($name);
 
 		$infos['artist'] = $analyze['tags']['id3v2']['artist'][0]; // artist from any/all available tag formats
 		$infos['title'] = $analyze['tags']['id3v2']['title'][0];  // title from ID3v2
-		$infos['album'] = $analyze['tags']['id3v2']['album'][0];
-		$infos['year'] = $analyze['tags']['id3v2']['year'][0];
-		// $analyze['audio']['bitrate'];           // audio bitrate
+		$infos['album'] = $analyze['tags']['id3v2']['album'][0]; // album name
+		$infos['year'] = $analyze['tags']['id3v2']['year'][0]; // publication year
+		$infos['genre'] = $analyze['tags']['id3v2']['genre'][0]; // genre
+		$infos['track_number'] = $analyze['tags']['id3v2']['track_number'][0]; // genre
+		// $infos['picture'] = $analyze['comments']['picture'][0];
 
-		$clean_array = array_filter($infos);
+		$clean_array = array_filter($infos); 
 
 		if(!empty($clean_array))
 		{
@@ -89,10 +85,45 @@ class Upload extends CI_Controller {
 	}
 
 	/**
-	 * Traitement du formulaire d'édition id3tag
+	 * Editing form
 	 */
 	public function edit_media()
 	{
-		
+
+		// You should pass data here with standard field names as follows:
+		// * TITLE
+		// * ARTIST
+		// * ALBUM
+		// * TRACKNUMBER
+		// * COMMENT
+		// * GENRE
+		// * YEAR
+		// * ATTACHED_PICTURE (ID3v2 only)
+
+		$id3_obj = new getID3;
+		$writetags = new getid3_writetags; // object to edit tags
+		$name = $this->session->filename;
+
+		$data = [];
+		$data['ARTIST'][0]		= $this->input->post('artist');
+		$data['TITLE'][0]		= $this->input->post('title');
+		$data['ALBUM'][0]		= $this->input->post('album');
+		$data['YEAR'][0]		= $this->input->post('year');
+		$data['GENRE'][0]		= $this->input->post('genre');
+		$data['TRACKNUMBER'][0]	= $this->input->post('track_number');
+
+		$writetags->tag_data = $data;
+		$writetags->tag_encoding = 'UTF-8';
+		$writetags->tagformats = array('id3v2.2', 'id3v2.4');
+		$writetags->filename = $name;
+
+		if($writetags->WriteTags())
+		{
+			var_dump($id3_obj->analyze($name));
+		}
+		else
+		{
+			var_dump($writetags->errors);
+		}
 	}
 }
